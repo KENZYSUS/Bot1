@@ -5,13 +5,30 @@ import express from 'express';
 import fileUpload from 'express-fileupload';
 
 // --- Web Dashboard Configuration ---
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(express.json());
-app.use(fileUpload({ limits: { fileSize: 500 * 1024 * 1024 } })); // 500MB upload ceiling
+
+// Optimized file upload with temporary file storage to prevent memory & timeout limits
+app.use(fileUpload({
+    limits: { fileSize: 500 * 1024 * 1024 }, // 500MB upload ceiling
+    abortOnLimit: true,
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
 
 // Serve static index.html from project directory
 app.use(express.static('./'));
+
+// Active SSE client connections map for real-time progress broadcast
+const clients = new Map();
+
+function broadcastProgress(jobId, message) {
+    const clientRes = clients.get(jobId);
+    if (clientRes) {
+        clientRes.write(`data: ${JSON.stringify({ message })} \n\n`);
+    }
+}
 
 // Helper: Convert time string (00:00:12.34) to seconds
 function timeToSeconds(timeStr) {
@@ -94,8 +111,8 @@ const PRESETS = {
     }
 };
 
-// Smart FFmpeg Runner (Original untouched 2-thread engine)
-function runSmartFFmpeg(inputPath, outputPath, presetKey) {
+// Smart FFmpeg Runner (Original untouched 2-thread engine with live SSE piping)
+function runSmartFFmpeg(inputPath, outputPath, presetKey, jobId) {
     return new Promise((resolve, reject) => {
         const config = PRESETS[presetKey] || PRESETS.ultra;
 
@@ -138,7 +155,10 @@ function runSmartFFmpeg(inputPath, outputPath, presetKey) {
                     const currentSec = timeToSeconds(currentTimeStr);
                     let percent = Math.floor((currentSec / totalDurationSec) * 100);
                     if (percent > 100) percent = 100;
-                    process.stdout.write(`⏳ Compressing (${presetKey.toUpperCase()})... Time: ${currentTimeStr} [${getProgressBar(percent)}] ${percent}%\r`);
+                    
+                    const progressLine = `⏳ Compressing (${presetKey.toUpperCase()})... Time: ${currentTimeStr} [${getProgressBar(percent)}] ${percent}%`;
+                    process.stdout.write(progressLine + '\r');
+                    broadcastProgress(jobId, progressLine);
                 }
             }
         });
@@ -156,6 +176,20 @@ function runSmartFFmpeg(inputPath, outputPath, presetKey) {
     });
 }
 
+// SSE Live Progress Endpoint
+app.get('/api/progress/:jobId', (req, res) => {
+    const jobId = req.params.jobId;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    clients.set(jobId, res);
+
+    req.on('close', () => {
+        clients.delete(jobId);
+    });
+});
+
 // Web API endpoint for web-based compression with strict 30MB fallback safeguard
 app.post('/api/compress', async (req, res) => {
     if (!req.files || !req.files.video) {
@@ -164,28 +198,38 @@ app.post('/api/compress', async (req, res) => {
 
     const uploadedVideo = req.files.video;
     const presetKey = req.body.preset || 'ultra';
+    const jobId = req.body.jobId || Date.now().toString();
     const timestamp = Date.now();
-    const tempInput = path.resolve(`./web_input_${timestamp}.mp4`);
+    
+    // Use uploadedVideo.tempFilePath if available (handles temp chunks cleanly)
+    const tempInput = uploadedVideo.tempFilePath || path.resolve(`./web_input_${timestamp}.mp4`);
     const tempOutput = path.resolve(`./web_output_${timestamp}.mp4`);
 
     try {
-        await uploadedVideo.mv(tempInput);
+        if (!uploadedVideo.tempFilePath) {
+            await uploadedVideo.mv(tempInput);
+        }
+        
+        broadcastProgress(jobId, `Starting conversion pipeline using preset: ${presetKey.toUpperCase()}`);
 
         // Run initial compression
-        await runSmartFFmpeg(tempInput, tempOutput, presetKey);
+        await runSmartFFmpeg(tempInput, tempOutput, presetKey, jobId);
 
         let finalPath = tempOutput;
         let finalSize = getFileSize(finalPath);
         const MAX_SIZE_BYTES = 30 * 1024 * 1024; // 30MB limit safeguard
 
         if (finalSize > MAX_SIZE_BYTES) {
-            console.log(`⚠️ Output size exceeded 30MB limit. Automatically applying fallback optimization...`);
+            const fallbackMsg = `⚠️ Output size exceeded 30MB limit. Automatically applying fallback optimization...`;
+            console.log(fallbackMsg);
+            broadcastProgress(jobId, fallbackMsg);
+
             const fallbackOutput = path.resolve(`./web_fallback_${timestamp}.mp4`);
             let config = PRESETS[presetKey] || PRESETS.ultra;
             const fallbackCrf = String(parseInt(config.crf) + 4);
-
+            
             PRESETS._fallback = { ...config, crf: fallbackCrf };
-            await runSmartFFmpeg(tempInput, fallbackOutput, '_fallback');
+            await runSmartFFmpeg(tempInput, fallbackOutput, '_fallback', jobId);
             delete PRESETS._fallback;
 
             if (getFileSize(fallbackOutput) > 0) {
@@ -203,9 +247,12 @@ app.post('/api/compress', async (req, res) => {
         });
     } catch (err) {
         console.error('Web API Error:', err);
+        broadcastProgress(jobId, `❌ Error: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     } finally {
-        cleanupFiles(tempInput);
+        if (!uploadedVideo.tempFilePath) {
+            cleanupFiles(tempInput);
+        }
     }
 });
 
@@ -224,6 +271,5 @@ app.get('/api/download/:filename', (req, res) => {
 
 // Start Express Web Server
 app.listen(PORT, () => {
-    console.log(`🌐 Standalone MacBook Studio UI running at: http://localhost:${PORT}`);
+    console.log(`🌐 Standalone MacBook Studio UI running on port ${PORT}`);
 });
-
