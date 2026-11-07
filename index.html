@@ -130,7 +130,7 @@
             <div class="dropzone" id="dropZone" onclick="document.getElementById('fileInput').click()">
                 <h3 id="fileNameDisplay">📂 Drag & Drop Video File Here or Click to Browse</h3>
                 <p>Supports MP4, MOV, MKV up to 500MB</p>
-                <input type="file" id="fileInput" style="display:none" accept="video/*" onchange="handleFileSelect(this)">
+                <input type="file" id="fileInput" style="display:none" onchange="handleFileSelect(this)">
             </div>
             <div class="controls-grid">
                 <div class="group">
@@ -174,13 +174,14 @@
             const btn = document.getElementById('processBtn');
             btn.disabled = true;
             
-            const jobId = 'job_' + Math.random().toString(36.substring(2, 9));
+            const jobId = 'job_' + Math.random().toString(36).substring(2, 9);
             
-            // Connect to real-time live telemetry event stream
             const eventSource = new EventSource('/api/progress/' + jobId);
             eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                log(data.message);
+                try {
+                    const data = JSON.parse(event.data);
+                    log(data.message);
+                } catch(e) {}
             };
 
             log("Uploading video stream to cloud engine...");
@@ -194,10 +195,10 @@
                 const res = await fetch('/api/compress', { method: 'POST', body: formData });
                 const data = await res.json();
                 
-                eventSource.close(); // Close event stream when done
+                eventSource.close();
 
                 if (data.success) {
-                    log("✅ Compression completed successfully! Size: " + data.sizeMB + " MB");
+                    log("✅ Compression completed! Size: " + data.sizeMB + " MB");
                     log("⬇️ Downloading output file...");
                     window.location.href = '/api/download/' + data.filename;
                 } else {
@@ -212,3 +213,4 @@
     </script>
 </body>
 </html>
+
