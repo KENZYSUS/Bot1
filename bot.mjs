@@ -8,7 +8,14 @@ import fileUpload from 'express-fileupload';
 const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(express.json());
-app.use(fileUpload({ limits: { fileSize: 500 * 1024 * 1024 } })); // 500MB upload ceiling
+
+// Optimized file upload with temporary file storage to prevent memory & timeout limits
+app.use(fileUpload({
+    limits: { fileSize: 500 * 1024 * 1024 }, // 500MB upload ceiling
+    abortOnLimit: true,
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
 
 // Serve static index.html from project directory
 app.use(express.static('./'));
@@ -193,11 +200,16 @@ app.post('/api/compress', async (req, res) => {
     const presetKey = req.body.preset || 'ultra';
     const jobId = req.body.jobId || Date.now().toString();
     const timestamp = Date.now();
-    const tempInput = path.resolve(`./web_input_${timestamp}.mp4`);
+    
+    // Use uploadedVideo.tempFilePath if available (handles temp chunks cleanly)
+    const tempInput = uploadedVideo.tempFilePath || path.resolve(`./web_input_${timestamp}.mp4`);
     const tempOutput = path.resolve(`./web_output_${timestamp}.mp4`);
 
     try {
-        await uploadedVideo.mv(tempInput);
+        if (!uploadedVideo.tempFilePath) {
+            await uploadedVideo.mv(tempInput);
+        }
+        
         broadcastProgress(jobId, `Starting conversion pipeline using preset: ${presetKey.toUpperCase()}`);
 
         // Run initial compression
@@ -238,7 +250,9 @@ app.post('/api/compress', async (req, res) => {
         broadcastProgress(jobId, `❌ Error: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     } finally {
-        cleanupFiles(tempInput);
+        if (!uploadedVideo.tempFilePath) {
+            cleanupFiles(tempInput);
+        }
     }
 });
 
