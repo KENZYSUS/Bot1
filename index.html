@@ -112,6 +112,7 @@
             min-height: 70px;
             max-height: 110px;
             overflow-y: auto;
+            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -172,15 +173,29 @@
             if (!selectedFile) return;
             const btn = document.getElementById('processBtn');
             btn.disabled = true;
-            log("Uploading and initializing FFmpeg pipeline...");
+            
+            const jobId = 'job_' + Math.random().toString(36.substring(2, 9));
+            
+            // Connect to real-time live telemetry event stream
+            const eventSource = new EventSource('/api/progress/' + jobId);
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                log(data.message);
+            };
+
+            log("Uploading video stream to cloud engine...");
 
             const formData = new FormData();
             formData.append('video', selectedFile);
             formData.append('preset', document.getElementById('presetSelect').value);
+            formData.append('jobId', jobId);
 
             try {
                 const res = await fetch('/api/compress', { method: 'POST', body: formData });
                 const data = await res.json();
+                
+                eventSource.close(); // Close event stream when done
+
                 if (data.success) {
                     log("✅ Compression completed successfully! Size: " + data.sizeMB + " MB");
                     log("⬇️ Downloading output file...");
@@ -189,6 +204,7 @@
                     log("❌ Error: " + data.error);
                 }
             } catch (err) {
+                eventSource.close();
                 log("❌ Network transmission error.");
             }
             btn.disabled = false;
@@ -196,4 +212,3 @@
     </script>
 </body>
 </html>
-
