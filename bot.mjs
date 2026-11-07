@@ -270,6 +270,6 @@ app.get('/api/download/:filename', (req, res) => {
 });
 
 // Start Express Web Server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0' () => {
     console.log(`🌐 Standalone MacBook Studio UI running on port ${PORT}`);
 });
