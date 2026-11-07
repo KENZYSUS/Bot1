@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Xreyy Engine • macOS Studio</title>
+    <style>
+        :root {
+            --mac-bg: #1e1e1e;
+            --mac-window: #2d2d2d;
+            --mac-border: #3d3d3d;
+            --mac-text: #f5f5f7;
+            --mac-text-secondary: #8e8e93;
+            --mac-blue: #007aff;
+            --mac-blue-hover: #005ec4;
+            --mac-red: #ff5f56;
+            --mac-yellow: #ffbd2e;
+            --mac-green: #27c93f;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1e2f 100%);
+            color: var(--mac-text);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .macos-window {
+            width: 780px;
+            background: rgba(45, 45, 45, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+            overflow: hidden;
+        }
+        .titlebar {
+            height: 38px;
+            background: rgba(30, 30, 30, 0.6);
+            border-bottom: 1px solid var(--mac-border);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            position: relative;
+        }
+        .window-controls { display: flex; gap: 8px; }
+        .control { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .close { background: var(--mac-red); }
+        .minimize { background: var(--mac-yellow); }
+        .zoom { background: var(--mac-green); }
+        .title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--mac-text-secondary);
+            letter-spacing: 0.3px;
+        }
+        .content { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+        .dropzone {
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 35px;
+            text-align: center;
+            background: rgba(255,255,255,0.02);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dropzone:hover { border-color: var(--mac-blue); background: rgba(0, 122, 255, 0.04); }
+        .dropzone p { font-size: 14px; color: var(--mac-text-secondary); margin-top: 8px; }
+        .dropzone h3 { font-size: 16px; font-weight: 500; color: var(--mac-text); }
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .group { display: flex; flex-direction: column; gap: 6px; }
+        label { font-size: 12px; font-weight: 500; color: var(--mac-text-secondary); }
+        select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--mac-border);
+            border-radius: 6px;
+            padding: 9px 12px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus { border-color: var(--mac-blue); }
+        .btn {
+            background: var(--mac-blue);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+            display: inline-block;
+        }
+        .btn:hover { background: var(--mac-blue-hover); }
+        .btn:disabled { background: #444; color: #777; cursor: not-allowed; }
+        .status-box {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid var(--mac-border);
+            border-radius: 6px;
+            padding: 14px;
+            font-family: SF Mono, Monaco, Menlo, monospace;
+            font-size: 12px;
+            color: #a9b7c6;
+            min-height: 70px;
+            max-height: 110px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="macos-window">
+        <div class="titlebar">
+            <div class="window-controls">
+                <span class="control close"></span>
+                <span class="control minimize"></span>
+                <span class="control zoom"></span>
+            </div>
+            <div class="title">Xreyy Encoder Studio — macOS Native</div>
+        </div>
+        <div class="content">
+            <div class="dropzone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <h3 id="fileNameDisplay">📂 Drag & Drop Video File Here or Click to Browse</h3>
+                <p>Supports MP4, MOV, MKV up to 500MB</p>
+                <input type="file" id="fileInput" style="display:none" accept="video/*" onchange="handleFileSelect(this)">
+            </div>
+            <div class="controls-grid">
+                <div class="group">
+                    <label>COMPRESSION PRESET</label>
+                    <select id="presetSelect">
+                        <option value="max">🔥 Maximum Master UHD 120fps (1080p, CRF 18)</option>
+                        <option value="ultra" selected>✨ Ultra HD TikTok 60fps (1080p, CRF 20)</option>
+                        <option value="high">⚡ High Quality (720p, CRF 22)</option>
+                        <option value="fast">🚀 Fast Compression (480p, CRF 26)</option>
+                    </select>
+                </div>
+                <div class="group">
+                    <label>ACTION & OUTPUT</label>
+                    <button class="btn" id="processBtn" onclick="startCompression()" disabled>Start Compression</button>
+                </div>
+            </div>
+            <div class="group">
+                <label>ENCODER TELEMETRY LOG</label>
+                <div class="status-box" id="statusLog">Ready for input stream...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                selectedFile = input.files[0];
+                document.getElementById('fileNameDisplay').innerText = "Selected: " + selectedFile.name;
+                document.getElementById('processBtn').disabled = false;
+                log("File staged successfully: " + selectedFile.name);
+            }
+        }
+        function log(msg) {
+            const box = document.getElementById('statusLog');
+            box.innerText += "\n" + msg;
+            box.scrollTop = box.scrollHeight;
+        }
+        async function startCompression() {
+            if (!selectedFile) return;
+            const btn = document.getElementById('processBtn');
+            btn.disabled = true;
+            log("Uploading and initializing FFmpeg pipeline...");
+
+            const formData = new FormData();
+            formData.append('video', selectedFile);
+            formData.append('preset', document.getElementById('presetSelect').value);
+
+            try {
+                const res = await fetch('/api/compress', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    log("✅ Compression completed successfully! Size: " + data.sizeMB + " MB");
+                    log("⬇️ Downloading output file...");
+                    window.location.href = '/api/download/' + data.filename;
+                } else {
+                    log("❌ Error: " + data.error);
+                }
+            } catch (err) {
+                log("❌ Network transmission error.");
+            }
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
+
