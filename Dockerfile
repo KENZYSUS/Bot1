@@ -10,6 +10,9 @@ RUN npm install
 
 COPY . .
 
-EXPOSE 3000
+# Expose dynamic PORT variable for Render
+ENV PORT=10000
+EXPOSE 10000
+
 CMD ["npm", "start"]
 
