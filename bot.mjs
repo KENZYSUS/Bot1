@@ -5,7 +5,7 @@ import express from 'express';
 import fileUpload from 'express-fileupload';
 
 // --- Web Dashboard Configuration ---
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 const app = express();
 app.use(express.json());
 
