@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Optimized file upload with temporary file storage to prevent memory & timeout limits
 app.use(fileUpload({
-    limits: { fileSize: 150 * 1024 * 1024 }, // 150MB upload ceiling safe for free tier RAM
+    limits: { fileSize: 200 * 1024 * 1024 }, // 150MB upload ceiling safe for free tier RAM
     abortOnLimit: true,
     useTempFiles: true,
     tempFileDir: '/tmp/'
@@ -268,6 +268,6 @@ app.get('/api/download/:filename', (req, res) => {
 
 // Start Express Web Server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Standalone MacBook Studio UI running on port ${PORT}`);
+    console.log(`🌐 Compressor Video running on port ${PORT}`);
 });
 
