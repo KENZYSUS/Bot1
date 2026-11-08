@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Optimized file upload with temporary file storage to prevent memory & timeout limits
 app.use(fileUpload({
-    limits: { fileSize: 150 * 1024 * 1024 }, // 500MB upload ceiling
+    limits: { fileSize: 150 * 1024 * 1024 }, // 150MB upload ceiling safe for free tier RAM
     abortOnLimit: true,
     useTempFiles: true,
     tempFileDir: '/tmp/'
@@ -67,7 +67,7 @@ function cleanupFiles(...filePaths) {
     });
 }
 
-// Preset Configs (Original untouched presets with 'max' 120fps and 30MB safeguard support)
+// Preset Configs (Original untouched presets with full configuration support)
 const PRESETS = {
     max: {
         vcodec: 'libx264',
@@ -111,7 +111,7 @@ const PRESETS = {
     }
 };
 
-// Smart FFmpeg Runner (Original untouched 2-thread engine with live SSE piping)
+// Smart FFmpeg Runner (Optimized to 1 thread for Render Free Tier RAM Safety)
 function runSmartFFmpeg(inputPath, outputPath, presetKey, jobId) {
     return new Promise((resolve, reject) => {
         const config = PRESETS[presetKey] || PRESETS.ultra;
@@ -121,9 +121,7 @@ function runSmartFFmpeg(inputPath, outputPath, presetKey, jobId) {
             '-vcodec', 'libx264',
             '-crf', config.crf,
             '-preset', config.preset,
-            '-maxrate', presetKey === 'max' ? '8M' : '5M',
-            '-bufsize', presetKey === 'max' ? '10M' : '6M',
-            '-threads', '2', // Limited to 2 threads
+            '-threads', '1', // Locked to 1 thread to prevent Render RAM overflow
             '-pix_fmt', 'yuv420p',
             '-color_primaries', 'bt709',
             '-color_trc', 'bt709',
@@ -155,7 +153,7 @@ function runSmartFFmpeg(inputPath, outputPath, presetKey, jobId) {
                     const currentSec = timeToSeconds(currentTimeStr);
                     let percent = Math.floor((currentSec / totalDurationSec) * 100);
                     if (percent > 100) percent = 100;
-                    
+
                     const progressLine = `⏳ Compressing (${presetKey.toUpperCase()})... Time: ${currentTimeStr} [${getProgressBar(percent)}] ${percent}%`;
                     process.stdout.write(progressLine + '\r');
                     broadcastProgress(jobId, progressLine);
@@ -200,8 +198,7 @@ app.post('/api/compress', async (req, res) => {
     const presetKey = req.body.preset || 'ultra';
     const jobId = req.body.jobId || Date.now().toString();
     const timestamp = Date.now();
-    
-    // Use uploadedVideo.tempFilePath if available (handles temp chunks cleanly)
+
     const tempInput = uploadedVideo.tempFilePath || path.resolve(`./web_input_${timestamp}.mp4`);
     const tempOutput = path.resolve(`./web_output_${timestamp}.mp4`);
 
@@ -209,7 +206,7 @@ app.post('/api/compress', async (req, res) => {
         if (!uploadedVideo.tempFilePath) {
             await uploadedVideo.mv(tempInput);
         }
-        
+
         broadcastProgress(jobId, `Starting conversion pipeline using preset: ${presetKey.toUpperCase()}`);
 
         // Run initial compression
@@ -227,7 +224,7 @@ app.post('/api/compress', async (req, res) => {
             const fallbackOutput = path.resolve(`./web_fallback_${timestamp}.mp4`);
             let config = PRESETS[presetKey] || PRESETS.ultra;
             const fallbackCrf = String(parseInt(config.crf) + 4);
-            
+
             PRESETS._fallback = { ...config, crf: fallbackCrf };
             await runSmartFFmpeg(tempInput, fallbackOutput, '_fallback', jobId);
             delete PRESETS._fallback;
@@ -273,3 +270,4 @@ app.get('/api/download/:filename', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Standalone MacBook Studio UI running on port ${PORT}`);
 });
+
