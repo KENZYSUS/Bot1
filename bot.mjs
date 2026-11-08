@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Optimized file upload with temporary file storage to prevent memory & timeout limits
 app.use(fileUpload({
-    limits: { fileSize: 500 * 1024 * 1024 }, // 500MB upload ceiling
+    limits: { fileSize: 150 * 1024 * 1024 }, // 500MB upload ceiling
     abortOnLimit: true,
     useTempFiles: true,
     tempFileDir: '/tmp/'
